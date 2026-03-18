@@ -223,7 +223,15 @@
   .empty-state .big { font-family: var(--mono); font-size: 44px; opacity: 0.2; margin-bottom: 8px; }
   .empty-state p { font-size: 13px; line-height: 1.7; color: var(--muted); }
 
-  .toast {
+  .wa-btn {
+    width: 100%; margin-top: 10px; padding: 14px; border-radius: 12px;
+    background: #25D366; color: #fff; border: none;
+    font-family: var(--mono); font-size: 13px; font-weight: 500; letter-spacing: 0.06em;
+    cursor: pointer; transition: transform 0.1s, opacity 0.15s;
+    display: none;
+  }
+  .wa-btn.visible { display: block; }
+  .wa-btn:active { transform: scale(0.97); }
     position: fixed; bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); left: 50%;
     transform: translateX(-50%) translateY(20px); background: var(--text); color: var(--bg);
     font-family: var(--mono); font-size: 12px; font-weight: 500; padding: 10px 20px;
@@ -266,6 +274,17 @@
     <span class="settings-title">Innstillinger</span>
   </div>
   <div class="settings-body">
+    <div class="settings-section">
+      <div class="settings-section-label">Varsling</div>
+      <div class="settings-card">
+        <p>Legg inn nummeret til den du konkurrerer med, så kan du varsle dem rett fra appen når du finner et nytt skilt.</p>
+        <div class="settings-row">
+          <input type="text" id="settings-wa-num" inputmode="tel" maxlength="15" placeholder="4712345678" autocomplete="off" spellcheck="false" style="width:160px; font-size:16px; letter-spacing:0.04em;">
+          <button onclick="saveWaNumber()">Lagre</button>
+        </div>
+        <p id="wa-saved-txt" style="margin-top:10px; margin-bottom:0; font-size:12px; color:var(--accent);"></p>
+      </div>
+    </div>
     <div class="settings-section">
       <div class="settings-section-label">Juster fremgang</div>
       <div class="settings-card">
@@ -320,6 +339,7 @@
           <span class="btn-label">TRYKK HER NÅR DU SER SKILTET ✓</span>
         </button>
       </div>
+      <button class="wa-btn" id="wa-btn" onclick="sendWhatsApp()">Send melding på WhatsApp 💬</button>
     </div>
 
     <div class="comp-history-wrap">
@@ -362,6 +382,7 @@
 let nextNum = parseInt(localStorage.getItem('sj_next') || '-1');
 let history = JSON.parse(localStorage.getItem('sj_history') || '[]');
 let dbPlates = JSON.parse(localStorage.getItem('sj_db') || '[]');
+let waNumber = localStorage.getItem('sj_wa') || '';
 let filterMode = 'num';
 let lat = null, lng = null, addrText = 'Ukjent posisjon';
 
@@ -371,6 +392,7 @@ function persist() {
   localStorage.setItem('sj_next', nextNum);
   localStorage.setItem('sj_history', JSON.stringify(history));
   localStorage.setItem('sj_db', JSON.stringify(dbPlates));
+  localStorage.setItem('sj_wa', waNumber);
 }
 
 function showToast(msg) {
@@ -411,7 +433,32 @@ function startFromManual() {
 
 // ── SETTINGS ──
 function openSettings() {
+  if (waNumber) {
+    document.getElementById('settings-wa-num').value = waNumber;
+    document.getElementById('wa-saved-txt').textContent = 'Lagret: +' + waNumber;
+  }
   showScreen('screen-settings');
+}
+
+function saveWaNumber() {
+  const val = document.getElementById('settings-wa-num').value.trim().replace(/\D/g, '');
+  if (!val) return;
+  waNumber = val;
+  persist();
+  document.getElementById('wa-saved-txt').textContent = 'Lagret: +' + waNumber;
+  updateWaBtn();
+  showToast('Nummer lagret!');
+}
+
+function updateWaBtn() {
+  document.getElementById('wa-btn').classList.toggle('visible', !!waNumber);
+}
+
+function sendWhatsApp() {
+  const prev = pad(nextNum - 1);
+  const next = pad(nextNum);
+  const msg = encodeURIComponent('Fant ' + prev + '! 🚗 Neste jeg trenger er ' + next + '.');
+  window.open('https://wa.me/' + waNumber + '?text=' + msg, '_blank');
 }
 
 function goBack() {
@@ -478,6 +525,7 @@ function confirmSeen() {
   nextNum++;
   persist();
   renderComp();
+  updateWaBtn();
   showToast(pad(nextNum - 1) + ' bekreftet! Neste: ' + pad(nextNum));
 }
 
@@ -585,6 +633,7 @@ if (nextNum >= 0) {
   showScreen('screen-app');
   renderComp();
   renderDb();
+  updateWaBtn();
   initGeo();
 }
 </script>
