@@ -232,11 +232,41 @@
   }
   .wa-btn.visible { display: block; }
   .wa-btn:active { transform: scale(0.97); }
+
+  .cam-btn {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 9px 11px; cursor: pointer; font-size: 18px; line-height: 1;
+    transition: all 0.15s; flex-shrink: 0;
+  }
+  .cam-btn:active { transform: scale(0.88); }
+
+  .scan-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+    z-index: 300; flex-direction: column; align-items: center; justify-content: center; padding: 24px;
+  }
+  .scan-overlay.active { display: flex; }
+  .scan-title { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); margin-bottom: 16px; }
+  .scan-preview { width: 100%; max-width: 380px; border-radius: 14px; overflow: hidden; background: var(--surface); border: 1px solid var(--border2); min-height: 200px; display: flex; align-items: center; justify-content: center; }
+  .scan-preview img { width: 100%; display: block; border-radius: 14px; }
+  .scan-result { margin-top: 20px; text-align: center; }
+  .scan-result .scan-num { font-family: var(--mono); font-size: 52px; font-weight: 500; color: var(--accent); letter-spacing: 0.1em; line-height: 1; }
+  .scan-result .scan-sub { font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .scan-actions { display: flex; gap: 10px; margin-top: 20px; width: 100%; max-width: 380px; }
+  .scan-actions button {
+    flex: 1; padding: 14px; border-radius: 12px; border: none; font-family: var(--mono);
+    font-size: 12px; font-weight: 500; letter-spacing: 0.06em; cursor: pointer; transition: transform 0.1s;
+  }
+  .scan-actions button:active { transform: scale(0.96); }
+  .scan-accept { background: var(--accent); color: #0a0a0a; }
+  .scan-cancel { background: var(--surface); color: var(--muted); border: 1px solid var(--border2) !important; }
+  .scan-spinner { font-family: var(--mono); font-size: 13px; color: var(--muted); margin-top: 20px; }
+
+  .toast {
     position: fixed; bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); left: 50%;
     transform: translateX(-50%) translateY(20px); background: var(--text); color: var(--bg);
     font-family: var(--mono); font-size: 12px; font-weight: 500; padding: 10px 20px;
     border-radius: 99px; opacity: 0; transition: opacity 0.2s, transform 0.2s;
-    pointer-events: none; white-space: nowrap; z-index: 200;
+    pointer-events: none; white-space: nowrap; z-index: 400;
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
@@ -333,11 +363,14 @@
     </div>
 
     <div class="comp-action">
-      <div class="confirm-btn-wrap">
-        <button class="confirm-btn" onclick="confirmSeen()">
-          <span class="btn-num" id="confirm-btn-num">263</span>
-          <span class="btn-label">TRYKK HER NÅR DU SER SKILTET ✓</span>
-        </button>
+      <div style="display:flex;gap:10px;align-items:stretch;">
+        <div class="confirm-btn-wrap" style="flex:1;">
+          <button class="confirm-btn" onclick="confirmSeen()">
+            <span class="btn-num" id="confirm-btn-num">263</span>
+            <span class="btn-label">TRYKK HER NÅR DU SER SKILTET ✓</span>
+          </button>
+        </div>
+        <button class="cam-btn" onclick="openScan('comp')" title="Skann skilt">📷</button>
       </div>
       <button class="wa-btn" id="wa-btn" onclick="sendWhatsApp()">Send melding på WhatsApp 💬</button>
     </div>
@@ -358,6 +391,7 @@
             <div class="loc-label">Posisjon</div>
             <div class="loc-val"><span class="loc-dot" id="loc-dot"></span><span id="loc-text">Henter...</span></div>
           </div>
+          <button class="cam-btn" onclick="openScan('db')" title="Skann skilt">📷</button>
           <button class="db-save-btn" onclick="saveToDb()">LAGRE</button>
         </div>
         <p class="db-hint">Samme skilt kan lagres flere ganger på ulike steder. Velg beste lokasjon når du trenger det.</p>
@@ -378,12 +412,34 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- ── SCAN OVERLAY ── -->
+<input type="file" id="cam-input" accept="image/*" capture="environment" style="display:none">
+<div class="scan-overlay" id="scan-overlay">
+  <div class="scan-title">Skiltgjenkjenning</div>
+  <div class="scan-preview" id="scan-preview">
+    <span style="font-size:13px;color:var(--muted);">Velger bilde...</span>
+  </div>
+  <div class="scan-spinner" id="scan-spinner" style="display:none">Analyserer skiltet...</div>
+  <div class="scan-result" id="scan-result" style="display:none">
+    <div class="scan-num" id="scan-num">—</div>
+    <div class="scan-sub" id="scan-sub"></div>
+  </div>
+  <div class="scan-actions" id="scan-actions" style="display:none">
+    <button class="scan-cancel" onclick="closeScan()">Avbryt</button>
+    <button class="scan-accept" id="scan-accept-btn" onclick="acceptScan()">Bruk dette tallet</button>
+  </div>
+  <div style="margin-top:14px;">
+    <button onclick="closeScan()" style="background:none;border:none;font-family:var(--mono);font-size:11px;color:var(--faint);cursor:pointer;letter-spacing:0.06em;">AVBRYT</button>
+  </div>
+</div>
+
 <script>
 let nextNum = parseInt(localStorage.getItem('sj_next') || '-1');
 let history = JSON.parse(localStorage.getItem('sj_history') || '[]');
 let dbPlates = JSON.parse(localStorage.getItem('sj_db') || '[]');
 let waNumber = localStorage.getItem('sj_wa') || '';
 let filterMode = 'num';
+let showUsed = false;
 let lat = null, lng = null, addrText = 'Ukjent posisjon';
 
 function pad(n) { return String(n).padStart(3, '0'); }
@@ -522,9 +578,12 @@ function confirmSeen() {
   const dateStr = now.toLocaleDateString('nb-NO', { day:'numeric', month:'short' }) + ' ' +
                   now.toLocaleTimeString('nb-NO', { hour:'2-digit', minute:'2-digit' });
   history.push({ num: nextNum, date: dateStr });
+  // Mark matching db entries as used
+  dbPlates = dbPlates.map(p => p.number === nextNum ? { ...p, used: true } : p);
   nextNum++;
   persist();
   renderComp();
+  renderDb();
   updateWaBtn();
   showToast(pad(nextNum - 1) + ' bekreftet! Neste: ' + pad(nextNum));
 }
@@ -545,27 +604,49 @@ function setFilter(mode) {
   renderDb();
 }
 
+function toggleShowUsed() {
+  showUsed = !showUsed;
+  renderDb();
+}
+
 function renderDb() {
   const el = document.getElementById('plate-list');
-  document.getElementById('db-count').textContent = dbPlates.length + ' observasjoner';
+  const active = dbPlates.filter(p => !p.used);
+  const used = dbPlates.filter(p => p.used);
+
+  const countEl = document.getElementById('db-count');
+  countEl.textContent = active.length + ' observasjoner' + (used.length ? ' · ' + used.length + ' brukt' : '');
+
   if (dbPlates.length === 0) {
     el.innerHTML = '<div class="empty-state"><div class="big">#</div><p>Ingen skilt lagret ennå.<br>Registrer parkerte biler du ser<br>for å bygge opp databasen din.</p></div>';
     return;
   }
-  const sorted = [...dbPlates].sort((a, b) => filterMode === 'num' ? a.number - b.number || b.id - a.id : b.id - a.id);
-  el.innerHTML = sorted.map(p => `
-    <div class="plate-item">
+
+  const sort = arr => [...arr].sort((a, b) => filterMode === 'num' ? a.number - b.number || b.id - a.id : b.id - a.id);
+
+  const renderItem = p => `
+    <div class="plate-item${p.used ? ' used' : ''}">
       <span class="num">${pad(p.number)}</span>
       <div class="meta">
         <div class="addr">${p.addr}</div>
-        <div class="date">${p.date}</div>
+        <div class="date">${p.used ? '✓ brukt · ' : ''}${p.date}</div>
       </div>
       <div class="plate-actions">
         ${p.lat ? `<button class="icon-btn" onclick="openMap(${p.lat},${p.lng})">📍</button>` : ''}
         <button class="icon-btn del" onclick="deleteDb(${p.id})">✕</button>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+
+  let html = sort(active).map(renderItem).join('');
+
+  if (used.length) {
+    html += `<button onclick="toggleShowUsed()" style="width:100%;margin-top:8px;padding:10px;background:none;border:1px solid var(--border);border-radius:10px;font-family:var(--mono);font-size:11px;color:var(--muted);cursor:pointer;letter-spacing:0.06em;">
+      ${showUsed ? '▲ Skjul brukte (' + used.length + ')' : '▼ Vis brukte (' + used.length + ')'}
+    </button>`;
+    if (showUsed) html += sort(used).map(renderItem).join('');
+  }
+
+  el.innerHTML = html;
 }
 
 function openMap(la, lo) { window.open('https://maps.google.com/?q=' + la + ',' + lo, '_blank'); }
@@ -627,6 +708,113 @@ function initGeo() {
     document.getElementById('loc-text').textContent = 'Ingen tilgang';
   }, { enableHighAccuracy: true, maximumAge: 20000, timeout: 10000 });
 }
+
+// ── CAMERA / SCAN ──
+let scanMode = null;
+let scanValue = null;
+
+function openScan(mode) {
+  scanMode = mode;
+  scanValue = null;
+  document.getElementById('scan-result').style.display = 'none';
+  document.getElementById('scan-actions').style.display = 'none';
+  document.getElementById('scan-spinner').style.display = 'none';
+  document.getElementById('scan-preview').innerHTML = '<span style="font-size:13px;color:var(--muted);">Velger bilde...</span>';
+  document.getElementById('scan-overlay').classList.add('active');
+  const input = document.getElementById('cam-input');
+  input.value = '';
+  input.click();
+}
+
+function closeScan() {
+  document.getElementById('scan-overlay').classList.remove('active');
+  scanMode = null;
+  scanValue = null;
+}
+
+function acceptScan() {
+  if (scanValue === null) return;
+  if (scanMode === 'db') {
+    document.getElementById('plate-input').value = String(scanValue).padStart(3, '0');
+  } else if (scanMode === 'comp') {
+    confirmSeen();
+  }
+  closeScan();
+}
+
+document.getElementById('cam-input').addEventListener('change', async function() {
+  const file = this.files[0];
+  if (!file) { closeScan(); return; }
+
+  const reader = new FileReader();
+  reader.onload = async e => {
+    const b64 = e.target.result.split(',')[1];
+    const mime = file.type;
+
+    document.getElementById('scan-preview').innerHTML = `<img src="${e.target.result}" alt="Skilt">`;
+    document.getElementById('scan-spinner').style.display = 'block';
+    document.getElementById('scan-result').style.display = 'none';
+    document.getElementById('scan-actions').style.display = 'none';
+
+    try {
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 64,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'image', source: { type: 'base64', media_type: mime, data: b64 } },
+              { type: 'text', text: 'This is a photo of a Norwegian license plate. Extract the last 3 digits of the plate number. Reply with ONLY those 3 digits as a number, nothing else. If you cannot read the plate clearly, reply with "?" only.' }
+            ]
+          }]
+        })
+      });
+
+      const data = await resp.json();
+      const raw = (data.content?.[0]?.text || '').trim();
+      document.getElementById('scan-spinner').style.display = 'none';
+
+      if (/^\d{1,3}$/.test(raw)) {
+        scanValue = parseInt(raw, 10);
+        const padded = String(scanValue).padStart(3, '0');
+        document.getElementById('scan-num').textContent = padded;
+
+        if (scanMode === 'comp') {
+          const match = scanValue === nextNum;
+          document.getElementById('scan-sub').textContent = match
+            ? 'Dette er skiltet du leter etter! ✓'
+            : 'Du leter etter ' + pad(nextNum) + ' — dette er ' + padded;
+          document.getElementById('scan-accept-btn').textContent = match ? 'Bekreft ✓' : 'Bruk likevel';
+          document.getElementById('scan-accept-btn').style.background = match ? 'var(--accent)' : 'var(--blue)';
+        } else {
+          document.getElementById('scan-sub').textContent = 'Siste tre siffer gjenkjent';
+          document.getElementById('scan-accept-btn').textContent = 'Fyll inn ' + padded;
+          document.getElementById('scan-accept-btn').style.background = 'var(--accent)';
+        }
+
+        document.getElementById('scan-result').style.display = 'block';
+        document.getElementById('scan-actions').style.display = 'flex';
+      } else {
+        document.getElementById('scan-num').textContent = '?';
+        document.getElementById('scan-sub').textContent = 'Kunne ikke lese skiltet. Prøv et klarere bilde.';
+        document.getElementById('scan-result').style.display = 'block';
+        document.getElementById('scan-actions').style.display = 'flex';
+        document.getElementById('scan-accept-btn').style.display = 'none';
+      }
+    } catch {
+      document.getElementById('scan-spinner').style.display = 'none';
+      document.getElementById('scan-num').textContent = '!';
+      document.getElementById('scan-sub').textContent = 'Noe gikk galt. Sjekk internettforbindelsen.';
+      document.getElementById('scan-result').style.display = 'block';
+      document.getElementById('scan-actions').style.display = 'flex';
+      document.getElementById('scan-accept-btn').style.display = 'none';
+    }
+  };
+  reader.readAsDataURL(file);
+});
 
 // ── INIT ──
 if (nextNum >= 0) {
